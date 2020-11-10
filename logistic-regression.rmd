@@ -1,0 +1,195 @@
+---
+title: "Logistic Regression Assignment"
+author: "John Chandler"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r includes, echo=F, warning=F, message=F}
+library(tidyverse)
+library(scales)
+library(readr)
+library(forcats)
+library(broom)
+```
+
+
+## Logistic Regression
+
+Logistic regression allows us to apply the power of regression to 
+cases where our outcome variable is binary (0/1). The fitting process and 
+coefficient interpretation are quite a bit different from linear 
+regression. The technique is powerful and pretty ubiquitous in business,
+where there are many problems with binary outcomes (e.g., purchasing, 
+re-purchasing, customer attrition, etc.)
+
+## Instructions
+
+Follow along in this document. There are places where I've added comments
+encouraging you to do analyses, make plots, etc. In the modeling
+section I've asked you to build a logistic regression model and in the
+interpretation section I've asked you to interpret it. Do so, then
+knit your model and commit both your knitted HTML and your RMD. 
+
+## Data
+
+The data for this project comes from a local company, TOMIS, who manages
+bookings, websites, and marketing for a variety of tour operators. They've 
+graciously allowed us to use a sample of data on customer booking habits. The 
+data is pretty large (~52 MB) and can be downloaded from Moodle. Once you've 
+downloaded it, extract it from its zip file into this folder. 
+
+```{r data-input, message=F}
+input.data.file <- "trip_scoring_data.txt"
+
+d <- read_tsv(input.data.file)
+
+```
+
+The data set has the following columns: 
+
+1. `id`: a unique identifier for the customer.
+1. `total_spent`: the amount of money the customer has spent with the tour operator. 
+1. `days_since_last`: the number of days since the last time the customer booked with this
+operator. 
+1. `bookings_in_last_13_months`: the number of bookings in the preceding 13 months. 
+1. `bookings_in_13_to_26_months`: the number of bookings 13 to 26 months ago. 
+1. `bookings_more_than_26_months`: the number of bookings more than 26 months ago. 
+1. `mean_dist_to_client_location`: the mean distance from the customer to the tour
+operator. This is missing for about 35\% of rows. 
+1. `mean_leading_days`: the mean number of days that the customer books their experiences.
+1. `mean_rebook_days`: if the customer rebooks, the mean number of days between those rebookings.
+1. `booking_dt`: the calendar date and time of the booking.
+1. `experience_dt`: the calendar date and time of the experience, which is what the tours or 
+trips are called. 
+1. `client`: There are 14 clients in the data set. These are the tour operators.
+1. `client_location`: Some clients have multiple locations. This field allows us to differentiate
+between them. 
+1. `guests`: The number of people on the experience.
+1. `domain`: the web domain of the customer's email. 
+1. `rebooked`: our response variable. Zero or one depending on whether or not the customer
+rebooks. There are 12.4\% of rows that have rebookings. 
+
+
+## Data Exploration
+
+<!-- Feel free to use this space to do any data exploration you'd like. I'll get you started --> 
+
+Let's take a look at rebooking rates by client:
+
+```{r client-rebooking-rate,message=F}
+d %>% 
+  group_by(client) %>% 
+  summarize(mean_rebook = mean(rebooked)) %>% 
+  mutate(client = fct_reorder(client,mean_rebook)) %>% 
+  ggplot(aes(x=mean_rebook,y=client)) + 
+  geom_point() + 
+  theme_minimal() + 
+  labs(x="Rebooking Rate",
+       y="Tour Operator") +
+  scale_x_continuous(label=percent)
+
+
+```
+
+As we can see, there's quite a bit of variability in rebooking rates across clients. Therefore,
+client is likely to be a useful explanatory variable in our model. 
+
+## Model
+
+<!-- Use this section to build a model of rebooking. 
+     I have some code to get you started. On my machine I can 
+     fit the full model, but you may not be able to, so I included some code
+     to allow you to subset the data. --> 
+
+
+```{r model}
+
+d <- d %>% 
+  mutate(client_fct = fct_reorder(client,rebooked,mean))
+
+glm.1 <- glm(rebooked ~ client_fct + 
+                    total_spent,
+                  data=d %>% slice_sample(prop=0.5),
+                  family="binomial",
+                  subset=total_spent < 20000)
+
+rb.fit <- tidy(glm.1) %>% 
+  mutate(exp_estimate = exp(estimate),
+         lb = exp(estimate - 2*std.error),
+         ub = exp(estimate + 2*std.error)) %>% 
+  mutate(pretty_term = if_else(grepl("client",term),
+                               gsub("client_fct","",term),
+                               term))
+
+
+```
+
+<!-- Discuss the model fitting process and the final model you arrived at. --> 
+
+
+## Interpretation
+
+<!-- use this section to discuss the model results. This can include the 
+     overall significance of the model and the significance of the model terms. 
+     Plot the coefficients. If you have many terms in the model, consider 
+     plotting the categorical variables on their own. 
+     
+     In the chart below I'd definitely need to discuss the masked client, 
+     --> 
+
+```{r client-plot}
+
+ggplot(rb.fit %>% 
+         filter(grepl("client",term)) %>% 
+         mutate(pretty_term = fct_reorder(pretty_term,exp_estimate)),
+       aes(x=exp_estimate,y=pretty_term)) + 
+  geom_point() + 
+  geom_errorbarh(aes(xmin=lb,xmax=ub,y=pretty_term),
+                 height=0) + 
+  theme_minimal() + 
+  labs(x="Odds Multiplier",
+       y="Model Term") + 
+  geom_vline(xintercept=1,col="gray70")
+
+
+```
+
+## Accuracy
+
+<!--    
+    Do a new fit of your model on a subset of your data, then evaluate it on the 
+    portion not used for fitting. Logistic regression models output probabilities, 
+    so you could compare the `rebooked` column to your rounded predicted probability. 
+    I have some code to help you out with this. --> 
+
+
+```{r accuracy,warning=F}
+  holdout.d <- d %>% 
+    slice_sample(prop=0.1) %>% 
+    select(id,rebooked)
+
+  glm.test <- update(glm.1,subset=!(id %in% holdout.d$id))
+  
+  holdout.d <- holdout.d %>% 
+    mutate(predicted_val = predict(glm.1,
+                                   newdata=d %>% 
+                                     filter(id %in% holdout.d$id)))
+  holdout.d <- holdout.d %>% 
+    mutate(est_rebooked = as.numeric(predicted_val >= 0.5))
+  
+  confusion.mat <- table(holdout.d$rebooked,holdout.d$est_rebooked)
+  
+  rownames(confusion.mat) <- c("Didn't Rebook","Did Rebook")
+  colnames(confusion.mat) <- c("Pred No Rebook","Pred Rebook")
+
+  knitr::kable(confusion.mat)
+  
+```
+
+<!-- Your interpretation here. In my example we don't do a great job period, 
+     although we're okay at predicting the didn't rebook group. --> 
+
