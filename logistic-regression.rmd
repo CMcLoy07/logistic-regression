@@ -1,6 +1,6 @@
 ---
 title: "Logistic Regression Assignment"
-author: "John Chandler"
+author: "Chris McLoy"
 output: html_document
 ---
 
@@ -42,7 +42,7 @@ graciously allowed us to use a sample of data on customer booking habits. The
 data is pretty large (~52 MB) and can be downloaded from Moodle. Once you've 
 downloaded it, extract it from its zip file into this folder. 
 
-```{r data-input, message=F}
+```{r data-input, echo = F, message=F}
 input.data.file <- "trip_scoring_data.txt"
 
 d <- read_tsv(input.data.file)
@@ -80,7 +80,7 @@ rebooks. There are 12.4\% of rows that have rebookings.
 
 Let's take a look at rebooking rates by client:
 
-```{r client-rebooking-rate,message=F}
+```{r "client-rebooking-rate", message=F, echo= F, eval = T}
 d %>% 
   group_by(client) %>% 
   summarize(mean_rebook = mean(rebooked)) %>% 
@@ -106,16 +106,18 @@ client is likely to be a useful explanatory variable in our model.
      to allow you to subset the data. --> 
 
 
-```{r model}
+```{r model, echo=F, eval=T}
 
 d <- d %>% 
   mutate(client_fct = fct_reorder(client,rebooked,mean))
 
 glm.1 <- glm(rebooked ~ client_fct + 
-                    total_spent,
+                    total_spent + bookings_in_13_to_26_months + 
+                  mean_leading_days,
                   data=d %>% slice_sample(prop=0.5),
                   family="binomial",
                   subset=total_spent < 20000)
+
 
 rb.fit <- tidy(glm.1) %>% 
   mutate(exp_estimate = exp(estimate),
@@ -126,22 +128,32 @@ rb.fit <- tidy(glm.1) %>%
                                term))
 
 
+summary(glm.1)
+
 ```
 
 <!-- Discuss the model fitting process and the final model you arrived at. --> 
 
+The process I took was trial and error. At first I took the variables client_fct, total_spent, bookings > 26 months, and mean_leading days. Each one besides bookings >26 months had extremely low p values. Although the bookings > 26 months was still within the %5 acceptance range, I tried another model. 
+
+From here I went with the next booking timeframe and that was 13 to 26 months. With this all variables were significantly small. The final model I arrived had included the variables of clie?nt_fct, total_spent, bookings between 13 and 26 months, and mean_leading days.
+
 
 ## Interpretation
 
-<!-- use this section to discuss the model results. This can include the 
-     overall significance of the model and the significance of the model terms. 
-     Plot the coefficients. If you have many terms in the model, consider 
-     plotting the categorical variables on their own. 
-     
-     In the chart below I'd definitely need to discuss the masked client, 
-     --> 
+As discussed above the model created has great significance when comparing the variables (total spent, bookings between 13 and 26 months, and mean leading days). The code below pulls in data and shows the probably of rebookings using the client function and holding all other items equal. With this, we show that the probability for someone to rebook going to Handlebar is less than 9%, while the probability to rebook to ocoee-zipz is 37.9% all have an average mean rebooking time of 19.3 days and an average spent of $222.   
 
-```{r client-plot}
+```{r client-plot, echo= F, eval= F}
+
+new.d <- tibble(client_fct= unique(d$client_fct),
+                total_spent = mean(d$total_spent, na.rm = T),
+                mean_leading_days = mean(d$mean_leading_days, na.rm = T),
+                bookings_in_13_to_26_months= mean(d$bookings_in_13_to_26_months, na.rm= T))
+new.d <- new.d %>%
+  mutate(prob = predict(glm.1, newdata = new.d, type = "response"))
+
+
+
 
 ggplot(rb.fit %>% 
          filter(grepl("client",term)) %>% 
@@ -154,7 +166,7 @@ ggplot(rb.fit %>%
   labs(x="Odds Multiplier",
        y="Model Term") + 
   geom_vline(xintercept=1,col="gray70")
-
+l
 
 ```
 
@@ -167,7 +179,7 @@ ggplot(rb.fit %>%
     I have some code to help you out with this. --> 
 
 
-```{r accuracy,warning=F}
+```{r accuracy,warning=F, echo=F, eval = T}
   holdout.d <- d %>% 
     slice_sample(prop=0.1) %>% 
     select(id,rebooked)
@@ -193,3 +205,4 @@ ggplot(rb.fit %>%
 <!-- Your interpretation here. In my example we don't do a great job period, 
      although we're okay at predicting the didn't rebook group. --> 
 
+The model I predicted provided an 88.9% accuracy rate for the No Rebook attribute. So the over all the classifier is 88.9% correct, but our true postive rate is less than 1%. Thus we are great at saying what money wont be coming in, but what money would come in. :) 
