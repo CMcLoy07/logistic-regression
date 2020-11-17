@@ -136,14 +136,16 @@ summary(glm.1)
 
 The process I took was trial and error. At first I took the variables client_fct, total_spent, bookings > 26 months, and mean_leading days. Each one besides bookings >26 months had extremely low p values. Although the bookings > 26 months was still within the %5 acceptance range, I tried another model. 
 
-From here I went with the next booking timeframe and that was 13 to 26 months. With this all variables were significantly small. The final model I arrived had included the variables of clie?nt_fct, total_spent, bookings between 13 and 26 months, and mean_leading days.
+From here I went with the next booking timeframe and that was 13 to 26 months. With this all variables were significantly small. The final model I arrived had included the variables of client_fct, total_spent, bookings between 13 and 26 months, and mean_leading days.
+
+With this model, it shows the Bulldog Tours as being the response variable, while total_spent, bookings between 13 and 26 months, and mean_leading days are the explanatory vairables. In viewing the chart above, we see that for every $1 total_spent, the number of bulldog tours increased by 6.119e-04 while holding all other explanatory variables at 0. Where as for every 1 increase in bookings between 13-26 months, we see an increase in Bulldog Tours by 2.239e-01 and similar with every 1 increase in mean leading days we see an increase in Bulldog Tours of 3.640e-03.
 
 
 ## Interpretation
 
-As discussed above the model created has great significance when comparing the variables (total spent, bookings between 13 and 26 months, and mean leading days). The code below pulls in data and shows the probably of rebookings using the client function and holding all other items equal. With this, we show that the probability for someone to rebook going to Handlebar is less than 9%, while the probability to rebook to ocoee-zipz is 37.9% all have an average mean rebooking time of 19.3 days and an average spent of $222.   
+As discussed above the model created has great significance when comparing the variables (total spent, bookings between 13 and 26 months, and mean leading days). The code below pulls in data and shows the probably of rebookings using the client function and holding all other items equal. With this, we show that the probability for someone to rebook going to Handlebar is less than 9%, while the probability to rebook to ocoee-zipz is 40.37% all have an average mean rebooking time of 19.3 days and an average spent of $222.   
 
-```{r client-plot, echo= F, eval= F}
+```{r probability database, echo= F, eval= T}
 
 new.d <- tibble(client_fct= unique(d$client_fct),
                 total_spent = mean(d$total_spent, na.rm = T),
@@ -152,9 +154,11 @@ new.d <- tibble(client_fct= unique(d$client_fct),
 new.d <- new.d %>%
   mutate(prob = predict(glm.1, newdata = new.d, type = "response"))
 
+new.d
 
+```
 
-
+```{r clien-plot, echo=F, eval=T}
 ggplot(rb.fit %>% 
          filter(grepl("client",term)) %>% 
          mutate(pretty_term = fct_reorder(pretty_term,exp_estimate)),
@@ -166,7 +170,7 @@ ggplot(rb.fit %>%
   labs(x="Odds Multiplier",
        y="Model Term") + 
   geom_vline(xintercept=1,col="gray70")
-l
+
 
 ```
 
